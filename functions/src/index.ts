@@ -91,7 +91,7 @@ export const sendEmailNotification = functions
 
       // ส่งอีเมล
       await transporter.sendMail({
-        from: '"สมาคมผู้กำกับภาพยนตร์ไทย" <noreply@thaifilmdirectors.com>',
+        from: '"สมาคมผู้กำกับภาพยนตร์ไทย" <admin@thaifilmdirectors.com>',
         ...emailOptions
       });
 
