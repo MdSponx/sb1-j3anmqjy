@@ -1,0 +1,31 @@
+export interface User {
+  id: string;
+  fullname_th?: string;
+  fullname_en?: string;
+  nickname_th?: string;
+  nickname_en?: string;
+  birthdate?: string;
+  gender?: 'male' | 'female' | 'other';
+  phone?: string;
+  email?: string;
+  facebook_url?: string;
+  tiktok_url?: string;
+  youtube_url?: string;
+  instagram_url?: string;
+  vimeo_url?: string;
+  website_url?: string;
+  occupation?: string;
+  department_th?: string;
+  department_en?: string;
+  role_th?: string;
+  role_en?: string;
+  profile_image_url?: string;
+  id_card_image_url?: string;
+  payment_slip_url?: string;
+  member_status?: string;
+  payment_status?: string;
+  verification_status?: string;
+  plan_selection?: string;
+  created_at?: string;
+  updated_at?: string;
+}

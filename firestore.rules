@@ -1,0 +1,148 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.web_role == 'admin'
+      );
+    }
+    
+    function isEditor() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.web_role == 'editor';
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Movies collection
+    match /movies/{movieId} {
+      allow read: if true;
+      allow write: if isAdmin() || isEditor();
+    }
+
+    // Events collection
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, update: if isAdmin() || isEditor();
+      allow delete: if isAdmin();
+    }
+
+    // Projects collection
+    match /projects/{projectId} {
+      allow read: if true;
+      allow create, update: if isAdmin() || isEditor();
+      allow delete: if isAdmin();
+    }
+
+    // Project registrations collection
+    match /project_registrations/{registrationId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        request.auth.uid == resource.data.userId
+      );
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        request.auth.uid == resource.data.userId
+      );
+      allow delete: if isAuthenticated() && (
+        isAdmin() || 
+        request.auth.uid == resource.data.userId
+      );
+    }
+
+    // Event registrations collection
+    match /events_registration/{registrationId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        request.auth.uid == resource.data.userId
+      );
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        request.auth.uid == resource.data.userId
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Movie credits collection
+    match /movie_credits/{creditId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        // Allow owners to update their own credits except status
+        (isOwner(resource.data.userId) && !('status' in request.resource.data.diff(resource.data))) ||
+        // Allow admins to update status
+        isAdmin() ||
+        // Allow directors to update status
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.occupation == 'director')
+      );
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() && (
+        request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['member_status', 'payment_status', 'verification_status', 'updated_at', 'updated_by', 'web_role'])
+      ) || isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // Committee collection - Allow public read access
+    match /comittee/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Directors collection - Allow public read access
+    match /directors/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin() || isEditor();
+    }
+
+    // Department and Role collection
+    match /departmentAndRole/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Profile views collection - Allow read/write for all authenticated users
+    match /profile_views/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Profile stats collection - Allow read for all, write for owners and admins
+    match /profile_stats/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Endorsements collection - Allow read for all, write for authenticated users
+    match /endorsements/{endorsementId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        isOwner(resource.data.endorserId) || isAdmin()
+      );
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

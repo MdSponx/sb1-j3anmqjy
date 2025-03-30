@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "movies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "year_ce", "order": "ASCENDING" },
+        { "fieldPath": "release_date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        { "fieldPath": "occupation", "order": "ASCENDING" },
+        { "fieldPath": "verification_status", "order": "ASCENDING" },
+        { "fieldPath": "fullname_th", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movie_credits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "year", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

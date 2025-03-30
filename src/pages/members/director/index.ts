@@ -1,0 +1,1 @@
+export { DirectorGeneralPublicProfile as default } from './DirectorGeneralPublicProfile';
