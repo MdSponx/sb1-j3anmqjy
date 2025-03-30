@@ -18,6 +18,8 @@
     "nodemailer": "^6.9.7"
   },
   "devDependencies": {
+    "@types/node": "^22.13.14",
+    "@types/nodemailer": "^6.4.17",
     "typescript": "^5.2.2"
   },
   "private": true

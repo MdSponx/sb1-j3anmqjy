@@ -1,27 +1,30 @@
-import * as React from 'react';
-import { Slot } from '@radix-ui/react-slot';
-import { cn } from '../../lib/utils';
+import React from 'react';
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  asChild?: boolean;
+interface ButtonProps {
+  children: React.ReactNode;
+  variant?: 'primary' | 'secondary';
+  className?: string;
+  onClick?: () => void;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    return (
-      <Comp
-        className={cn(
-          "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500 disabled:pointer-events-none disabled:opacity-50",
-          className
-        )}
-        ref={ref}
-        {...props}
-      />
-    );
-  }
-);
-Button.displayName = "Button";
+export function Button({ 
+  children, 
+  variant = 'primary', 
+  className = '', 
+  onClick 
+}: ButtonProps) {
+  const baseStyles = 'px-8 py-3 rounded-full text-lg font-medium transition-colors duration-200';
+  const variantStyles = {
+    primary: 'bg-red-600 text-white hover:bg-red-700',
+    secondary: 'bg-gray-800 text-white hover:bg-gray-700'
+  };
 
-export { Button };
+  return (
+    <button 
+      className={`${baseStyles} ${variantStyles[variant]} ${className}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
