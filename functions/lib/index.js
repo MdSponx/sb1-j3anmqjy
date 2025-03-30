@@ -13,6 +13,8 @@ const transporter = nodemailer.createTransport({
         pass: functions.config().email.password
     }
 });
+// Get the Gmail address from Firebase config
+const gmailAddress = functions.config().email.user;
 exports.sendEmailNotification = functions
     .region("asia-southeast1")
     .https.onCall(async (data, context) => {
@@ -83,7 +85,7 @@ exports.sendEmailNotification = functions
                 throw new Error("ประเภทการแจ้งเตือนไม่ถูกต้อง");
         }
         // ส่งอีเมล
-        await transporter.sendMail(Object.assign({ from: '"สมาคมผู้กำกับภาพยนตร์ไทย" <admin@thaifilmdirectors.com>' }, emailOptions));
+        await transporter.sendMail(Object.assign(Object.assign({ from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>` }, emailOptions), { replyTo: "admin@thaifilmdirectors.com" }));
         return { success: true };
     }
     catch (error) {

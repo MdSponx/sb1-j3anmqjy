@@ -13,6 +13,9 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Get the Gmail address from Firebase config
+const gmailAddress = functions.config().email.user;
+
 export const sendEmailNotification = functions
   .region("asia-southeast1")
   .https.onCall(async (data: { type: string; userId: string }, context: functions.https.CallableContext) => {
@@ -91,8 +94,9 @@ export const sendEmailNotification = functions
 
       // ส่งอีเมล
       await transporter.sendMail({
-        from: '"สมาคมผู้กำกับภาพยนตร์ไทย" <admin@thaifilmdirectors.com>',
-        ...emailOptions
+        from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>`,
+        ...emailOptions,
+        replyTo: "admin@thaifilmdirectors.com"
       });
 
       return { success: true };
