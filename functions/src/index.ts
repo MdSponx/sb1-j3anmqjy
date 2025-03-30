@@ -18,23 +18,50 @@ const gmailAddress = functions.config().email.user;
 // ✅ ฟังก์ชันกลางสำหรับส่งอีเมล
 async function sendEmailNotificationHelper(type: string, userId: string) {
   try {
-    const userDoc = await admin.firestore().collection("users").doc(userId).get();
-    if (!userDoc.exists) throw new Error("ไม่พบผู้ใช้");
-    const userData = userDoc.data() || {};
-
-    // Get admin users
-    const adminSnapshot = await admin.firestore()
-      .collection("users")
-      .where("web_role", "==", "admin")
-      .get();
-
-    // Extract admin emails, filter out any undefined/null values
-    let adminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    // Default user data in case we can't fetch it
+    let userData: any = {
+      fullname_th: "ผู้ใช้",
+      email: ""
+    };
     
-    // If no admin emails found, use fallback emails
-    if (adminEmails.length === 0) {
-      console.log("⚠️ No admin users found, using fallback email addresses");
-      adminEmails = ["jmdsponx@gmail.com", "admin@thaifilmdirectors.com"];
+    try {
+      // Try to get user data, but don't fail if we can't
+      const userDoc = await admin.firestore().collection("users").doc(userId).get();
+      if (userDoc.exists) {
+        userData = userDoc.data() || userData;
+        console.log(`✅ Successfully fetched user data for ${userId}`);
+      } else {
+        console.warn(`⚠️ User document not found for ${userId}, using default values`);
+      }
+    } catch (userError) {
+      console.error(`❌ Error fetching user data: ${userError}`);
+      // Continue with default userData
+    }
+
+    // Default admin emails
+    let adminEmails = ["jmdsponx@gmail.com", "admin@thaifilmdirectors.com"];
+    
+    try {
+      // Try to get admin users, but don't fail if we can't
+      const adminSnapshot = await admin.firestore()
+        .collection("users")
+        .where("web_role", "==", "admin")
+        .get();
+
+      // Extract admin emails, filter out any undefined/null values
+      const fetchedAdminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+      
+      // Only use fetched emails if we found some
+      if (fetchedAdminEmails.length > 0) {
+        adminEmails = fetchedAdminEmails;
+        console.log(`✅ Successfully fetched ${adminEmails.length} admin emails`);
+      } else {
+        console.warn("⚠️ No admin users found in database, using fallback email addresses");
+      }
+    } catch (adminError) {
+      console.error(`❌ Error fetching admin users: ${adminError}`);
+      console.warn("⚠️ Using fallback admin email addresses due to error");
+      // Continue with default adminEmails
     }
     
     console.log(`📝 Admin emails for notification: ${adminEmails.join(", ")}`);
