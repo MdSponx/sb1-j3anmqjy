@@ -22,12 +22,22 @@ async function sendEmailNotificationHelper(type: string, userId: string) {
     if (!userDoc.exists) throw new Error("ไม่พบผู้ใช้");
     const userData = userDoc.data() || {};
 
+    // Get admin users
     const adminSnapshot = await admin.firestore()
       .collection("users")
       .where("web_role", "==", "admin")
       .get();
 
-    const adminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    // Extract admin emails, filter out any undefined/null values
+    let adminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    
+    // If no admin emails found, use fallback emails
+    if (adminEmails.length === 0) {
+      console.log("⚠️ No admin users found, using fallback email addresses");
+      adminEmails = ["jmdsponx@gmail.com", "admin@thaifilmdirectors.com"];
+    }
+    
+    console.log(`📝 Admin emails for notification: ${adminEmails.join(", ")}`);
 
     let emailOptions;
 

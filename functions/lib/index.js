@@ -21,11 +21,19 @@ async function sendEmailNotificationHelper(type, userId) {
         if (!userDoc.exists)
             throw new Error("ไม่พบผู้ใช้");
         const userData = userDoc.data() || {};
+        // Get admin users
         const adminSnapshot = await admin.firestore()
             .collection("users")
             .where("web_role", "==", "admin")
             .get();
-        const adminEmails = adminSnapshot.docs.map(doc => { var _a; return (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.email; }).filter(Boolean);
+        // Extract admin emails, filter out any undefined/null values
+        let adminEmails = adminSnapshot.docs.map(doc => { var _a; return (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.email; }).filter(Boolean);
+        // If no admin emails found, use fallback emails
+        if (adminEmails.length === 0) {
+            console.log("⚠️ No admin users found, using fallback email addresses");
+            adminEmails = ["jmdsponx@gmail.com", "admin@thaifilmdirectors.com"];
+        }
+        console.log(`📝 Admin emails for notification: ${adminEmails.join(", ")}`);
         let emailOptions;
         switch (type) {
             case "new_director_signup":
