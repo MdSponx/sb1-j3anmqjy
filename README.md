@@ -28,3 +28,4 @@ Fixed and enhanced email notifications for director submissions:
 - Result: 
   - Admin users now receive email notifications automatically when new directors submit applications
   - Directors receive email notifications automatically when their application is approved or rejected
+  - Fallback email addresses (jmdsponx@gmail.com and admin@thaifilmdirectors.com) are used if no admin users are found
