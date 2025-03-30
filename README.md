@@ -4,18 +4,31 @@
 
 ## Recent Updates
 
-### 3/31/2025 - Fix Firebase Error in Email Notifications
+### 3/31/2025 - Enhanced Email Notification Reliability
 
-Fixed an issue where Firebase couldn't load user data for email notifications:
+Improved the reliability of email notifications for director submissions:
 
-- Problem: Firebase functions were failing with an error when trying to load user data
-- Solution: Added robust error handling and fallbacks for database operations
+- Problem: 
+  - Email notifications were not consistently being sent when new director accounts were created
+  - Different field names in the database could cause notifications to be missed
+
+- Solution: 
+  - Enhanced the Cloud Functions with improved error handling and detailed logging
+  - Added support for multiple field names that might indicate a director account
+  - Implemented more robust status change detection
+
 - Implementation:
-  - Modified the email notification helper function to handle database errors gracefully
-  - Added default values for user data in case the database query fails
-  - Improved logging to better diagnose issues
-  - Ensured the function continues to work even if database operations fail
-- Result: Email notifications now work reliably even when there are temporary database issues
+  - Updated both `onNewDirectorSignup` and `onDirectorStatusChange` functions
+  - Added comprehensive logging at each step of the process for easier debugging
+  - Expanded field detection to check for multiple possible field names:
+    - For director detection: checks `occupation`, `role`, `user_type`, and `roles` array
+    - For status changes: checks `verification_status`, `status`, and `director_status`
+  - Added try/catch blocks with detailed error reporting
+
+- Result: 
+  - More reliable email notifications for both admin users and directors
+  - Better visibility into the notification process through detailed logs
+  - Increased resilience to database schema variations
 
 ### 3/30/2025 - Email Notification Fix and Automation
 
@@ -41,4 +54,3 @@ Fixed and enhanced email notifications for director submissions:
 - Result: 
   - Admin users now receive email notifications automatically when new directors submit applications
   - Directors receive email notifications automatically when their application is approved or rejected
-  - Fallback email addresses (jmdsponx@gmail.com and admin@thaifilmdirectors.com) are used if no admin users are found
