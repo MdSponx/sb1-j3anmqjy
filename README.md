@@ -4,6 +4,19 @@
 
 ## Recent Updates
 
+### 3/31/2025 - Fix Firebase Error in Email Notifications
+
+Fixed an issue where Firebase couldn't load user data for email notifications:
+
+- Problem: Firebase functions were failing with an error when trying to load user data
+- Solution: Added robust error handling and fallbacks for database operations
+- Implementation:
+  - Modified the email notification helper function to handle database errors gracefully
+  - Added default values for user data in case the database query fails
+  - Improved logging to better diagnose issues
+  - Ensured the function continues to work even if database operations fail
+- Result: Email notifications now work reliably even when there are temporary database issues
+
 ### 3/30/2025 - Email Notification Fix and Automation
 
 Fixed and enhanced email notifications for director submissions:
