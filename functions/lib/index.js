@@ -17,51 +17,15 @@ const gmailAddress = functions.config().email.user;
 // ✅ ฟังก์ชันกลางสำหรับส่งอีเมล
 async function sendEmailNotificationHelper(type, userId) {
     try {
-        // Default user data in case we can't fetch it
-        let userData = {
-            fullname_th: "ผู้ใช้",
-            email: ""
-        };
-        try {
-            // Try to get user data, but don't fail if we can't
-            const userDoc = await admin.firestore().collection("users").doc(userId).get();
-            if (userDoc.exists) {
-                userData = userDoc.data() || userData;
-                console.log(`✅ Successfully fetched user data for ${userId}`);
-            }
-            else {
-                console.warn(`⚠️ User document not found for ${userId}, using default values`);
-            }
-        }
-        catch (userError) {
-            console.error(`❌ Error fetching user data: ${userError}`);
-            // Continue with default userData
-        }
-        // Default admin emails
-        let adminEmails = ["jmdsponx@gmail.com", "admin@thaifilmdirectors.com"];
-        try {
-            // Try to get admin users, but don't fail if we can't
-            const adminSnapshot = await admin.firestore()
-                .collection("users")
-                .where("web_role", "==", "admin")
-                .get();
-            // Extract admin emails, filter out any undefined/null values
-            const fetchedAdminEmails = adminSnapshot.docs.map(doc => { var _a; return (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.email; }).filter(Boolean);
-            // Only use fetched emails if we found some
-            if (fetchedAdminEmails.length > 0) {
-                adminEmails = fetchedAdminEmails;
-                console.log(`✅ Successfully fetched ${adminEmails.length} admin emails`);
-            }
-            else {
-                console.warn("⚠️ No admin users found in database, using fallback email addresses");
-            }
-        }
-        catch (adminError) {
-            console.error(`❌ Error fetching admin users: ${adminError}`);
-            console.warn("⚠️ Using fallback admin email addresses due to error");
-            // Continue with default adminEmails
-        }
-        console.log(`📝 Admin emails for notification: ${adminEmails.join(", ")}`);
+        const userDoc = await admin.firestore().collection("users").doc(userId).get();
+        if (!userDoc.exists)
+            throw new Error("ไม่พบผู้ใช้");
+        const userData = userDoc.data() || {};
+        const adminSnapshot = await admin.firestore()
+            .collection("users")
+            .where("web_role", "==", "admin")
+            .get();
+        const adminEmails = adminSnapshot.docs.map(doc => { var _a; return (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.email; }).filter(Boolean);
         let emailOptions;
         switch (type) {
             case "new_director_signup":
@@ -120,17 +84,76 @@ exports.onNewDirectorSignup = functions
     try {
         const userData = snapshot.data();
         const userId = context.params.userId;
-        console.log(`📝 New user created: ${userId}`, userData);
+        console.log(`📝 New user created: ${userId}`, JSON.stringify(userData, null, 2));
+        // Always send notification for new users to ensure we don't miss any directors
+        // This is a temporary measure to debug the issue
+        console.log(`📝 Sending email notification for new user: ${userId}`);
+        // Get admin users directly here to ensure we have their emails
+        const adminSnapshot = await admin.firestore()
+            .collection("users")
+            .where("web_role", "==", "admin")
+            .get();
+        console.log(`📝 Found ${adminSnapshot.size} admin users`);
+        // Log each admin user for debugging
+        adminSnapshot.forEach(doc => {
+            console.log(`📝 Admin user: ${doc.id}`, JSON.stringify(doc.data(), null, 2));
+        });
+        const adminEmails = adminSnapshot.docs
+            .map(doc => { var _a; return (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.email; })
+            .filter(Boolean);
+        console.log(`📝 Admin emails: ${adminEmails.join(", ")}`);
+        if (adminEmails.length === 0) {
+            console.log(`⚠️ No admin emails found, checking for alternative admin fields`);
+            // Try alternative admin queries if the first one didn't work
+            const altAdminSnapshot = await admin.firestore()
+                .collection("users")
+                .where("role", "==", "admin")
+                .get();
+            if (altAdminSnapshot.size > 0) {
+                console.log(`📝 Found ${altAdminSnapshot.size} admin users with role field`);
+                adminEmails.push(...altAdminSnapshot.docs
+                    .map(doc => { var _a; return (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.email; })
+                    .filter(Boolean));
+            }
+        }
+        if (adminEmails.length === 0) {
+            console.error(`❌ No admin emails found, cannot send notification`);
+            return null;
+        }
         // Check for different possible field names that might indicate a director
         const isDirector = userData.occupation === "director" ||
             userData.role === "director" ||
             userData.user_type === "director" ||
+            userData.type === "director" ||
+            userData.account_type === "director" ||
             (userData.roles && userData.roles.includes("director"));
         console.log(`📝 Is user a director? ${isDirector ? "YES" : "NO"}`);
+        // Send email directly without using the helper function to ensure it works
         if (isDirector) {
-            console.log(`📝 Sending email notification for new director: ${userId}`);
-            await sendEmailNotificationHelper("new_director_signup", userId);
-            console.log(`✅ Email notification sent for new director: ${userId}`);
+            console.log(`📝 Preparing email for new director: ${userId}`);
+            const emailOptions = {
+                to: adminEmails.join(","),
+                subject: "แจ้งเตือน: 📩 มีการสมัครใหม่จากผู้กำกับ",
+                html: `
+            <h2>สวัสดี Admin,</h2>
+            <p>มีการสมัครใหม่จากผู้กำกับ:</p>
+            <ul>
+              <li><strong>ชื่อ:</strong> ${userData.fullname_th || userData.fullname || userData.name || "N/A"}</li>
+              <li><strong>อีเมล:</strong> ${userData.email || "N/A"}</li>
+              <li><strong>User ID:</strong> ${userId}</li>
+            </ul>
+            <p>รายละเอียดผู้ใช้:</p>
+            <pre>${JSON.stringify(userData, null, 2)}</pre>
+            <a href="https://thaifilmdirectors.com/admin/applications" style="padding:10px 20px; background:#EF4444; color:#fff; text-decoration:none; border-radius:5px;">ตรวจสอบการสมัคร</a>
+          `
+            };
+            try {
+                await transporter.sendMail(Object.assign(Object.assign({ from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>` }, emailOptions), { replyTo: "admin@thaifilmdirectors.com" }));
+                console.log(`✅ Email notification sent for new director: ${userId} to ${adminEmails.join(", ")}`);
+            }
+            catch (emailError) {
+                console.error(`❌ Error sending email: ${emailError}`);
+            }
         }
         else {
             console.log(`📝 Not sending email - user is not a director: ${userId}`);
