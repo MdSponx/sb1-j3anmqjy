@@ -15,20 +15,43 @@ const transporter = nodemailer.createTransport({
 
 const gmailAddress = functions.config().email.user;
 
-// ✅ ฟังก์ชันกลางสำหรับส่งอีเมล
-async function sendEmailNotificationHelper(type: string, userId: string) {
+// ฟังก์ชันกลางสำหรับส่งอีเมล
+async function sendEmailNotificationHelper(type: string, userId: string, userData?: any) {
   try {
-    const userDoc = await admin.firestore().collection("users").doc(userId).get();
-    if (!userDoc.exists) throw new Error("ไม่พบผู้ใช้");
-    const userData = userDoc.data() || {};
+    let userDoc;
+    let userData_final = userData;
 
+    // ถ้าไม่มีข้อมูลผู้ใช้ส่งมา ให้ดึงจาก Firestore
+    if (!userData_final) {
+      userDoc = await admin.firestore().collection("users").doc(userId).get();
+      if (!userDoc.exists) throw new Error("ไม่พบผู้ใช้");
+      userData_final = userDoc.data() || {};
+    }
+
+    // ดึงข้อมูลผู้ดูแลระบบที่มี web_role เป็น admin
     const adminSnapshot = await admin.firestore()
       .collection("users")
       .where("web_role", "==", "admin")
       .get();
 
-    const adminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    let adminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    
+    // ถ้าไม่พบผู้ดูแลระบบจาก web_role ให้ลองค้นหาจากฟิลด์ role
+    if (adminEmails.length === 0) {
+      const altAdminSnapshot = await admin.firestore()
+        .collection("users")
+        .where("role", "==", "admin")
+        .get();
+      
+      adminEmails = altAdminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    }
 
+    // ถ้ายังไม่พบผู้ดูแลระบบ ให้แจ้งเตือนความผิดพลาด
+    if (adminEmails.length === 0) {
+      throw new Error("ไม่พบอีเมลผู้ดูแลระบบ ไม่สามารถส่งการแจ้งเตือนได้");
+    }
+
+    // สร้างตัวเลือกสำหรับอีเมลตามประเภทการแจ้งเตือน
     let emailOptions;
 
     switch (type) {
@@ -40,8 +63,9 @@ async function sendEmailNotificationHelper(type: string, userId: string) {
             <h2>สวัสดี Admin,</h2>
             <p>มีการสมัครใหม่จากผู้กำกับ:</p>
             <ul>
-              <li><strong>ชื่อ:</strong> ${userData.fullname_th || "N/A"}</li>
-              <li><strong>อีเมล:</strong> ${userData.email || "N/A"}</li>
+              <li><strong>ชื่อ:</strong> ${userData_final.fullname_th || userData_final.fullname || userData_final.name || "N/A"}</li>
+              <li><strong>อีเมล:</strong> ${userData_final.email || "N/A"}</li>
+              <li><strong>User ID:</strong> ${userId}</li>
             </ul>
             <a href="https://thaifilmdirectors.com/admin/applications" style="padding:10px 20px; background:#EF4444; color:#fff; text-decoration:none; border-radius:5px;">ตรวจสอบการสมัคร</a>
           `
@@ -50,10 +74,10 @@ async function sendEmailNotificationHelper(type: string, userId: string) {
 
       case "director_approved":
         emailOptions = {
-          to: userData.email || "",
+          to: userData_final.email || "",
           subject: "ยินดีด้วย! 🎉 การสมัครของคุณได้รับการอนุมัติแล้ว",
           html: `
-            <h2>สวัสดีคุณ ${userData.fullname_th || "ผู้ใช้"},</h2>
+            <h2>สวัสดีคุณ ${userData_final.fullname_th || userData_final.fullname || userData_final.name || "ผู้ใช้"},</h2>
             <p>การสมัครเป็นผู้กำกับของคุณได้รับการอนุมัติเรียบร้อยแล้ว</p>
             <a href="https://thaifilmdirectors.com/edit-profile" style="padding:10px 20px; background:#EF4444; color:#fff; text-decoration:none; border-radius:5px;">อัปเดตโปรไฟล์ของคุณ</a>
           `
@@ -62,10 +86,10 @@ async function sendEmailNotificationHelper(type: string, userId: string) {
 
       case "director_rejected":
         emailOptions = {
-          to: userData.email || "",
+          to: userData_final.email || "",
           subject: "แจ้งสถานะการสมัครของคุณ",
           html: `
-            <h2>สวัสดีคุณ ${userData.fullname_th || "ผู้ใช้"},</h2>
+            <h2>สวัสดีคุณ ${userData_final.fullname_th || userData_final.fullname || userData_final.name || "ผู้ใช้"},</h2>
             <p>ขอแจ้งว่า การสมัครของคุณยังไม่ผ่านการอนุมัติในขณะนี้</p>
             <a href="mailto:contact@thaifilmdirectors.com" style="padding:10px 20px; background:#EF4444; color:#fff; text-decoration:none; border-radius:5px;">ติดต่อเรา</a>
           `
@@ -76,6 +100,12 @@ async function sendEmailNotificationHelper(type: string, userId: string) {
         throw new Error("ประเภทการแจ้งเตือนไม่ถูกต้อง");
     }
 
+    // ตรวจสอบว่ามีผู้รับอีเมลหรือไม่
+    if (!emailOptions.to || emailOptions.to.trim() === "") {
+      throw new Error("ไม่พบอีเมลผู้รับ ไม่สามารถส่งการแจ้งเตือนได้");
+    }
+
+    // ส่งอีเมล
     await transporter.sendMail({
       from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>`,
       ...emailOptions,
@@ -86,152 +116,86 @@ async function sendEmailNotificationHelper(type: string, userId: string) {
     return { success: true };
   } catch (error) {
     console.error("❌ sendEmailNotificationHelper error:", error);
-    throw error;
+    // Enhance error with more context
+    const enhancedError = error instanceof Error 
+      ? new Error(`Email notification failed (${type}): ${error.message}`) 
+      : new Error(`Email notification failed (${type}): ${String(error)}`);
+    throw enhancedError;
   }
 }
 
+// ฟังก์ชัน Cloud Function ที่ทริกเกอร์เมื่อมีผู้ใช้ใหม่
 export const onNewDirectorSignup = functions
   .region("asia-southeast1")
   .firestore.document("users/{userId}")
   .onCreate(async (snapshot, context) => {
+    const userId = context.params.userId;
     try {
       const userData = snapshot.data();
-      const userId = context.params.userId;
       
-      console.log(`📝 New user created: ${userId}`, JSON.stringify(userData, null, 2));
+      console.log(`📝 New user created: ${userId}`);
       
-      // Always send notification for new users to ensure we don't miss any directors
-      // This is a temporary measure to debug the issue
-      console.log(`📝 Sending email notification for new user: ${userId}`);
-      
-      // Get admin users directly here to ensure we have their emails
-      const adminSnapshot = await admin.firestore()
-        .collection("users")
-        .where("web_role", "==", "admin")
-        .get();
-      
-      console.log(`📝 Found ${adminSnapshot.size} admin users`);
-      
-      // Log each admin user for debugging
-      adminSnapshot.forEach(doc => {
-        console.log(`📝 Admin user: ${doc.id}`, JSON.stringify(doc.data(), null, 2));
-      });
-      
-      const adminEmails = adminSnapshot.docs
-        .map(doc => doc.data()?.email)
-        .filter(Boolean);
-      
-      console.log(`📝 Admin emails: ${adminEmails.join(", ")}`);
-      
-      if (adminEmails.length === 0) {
-        console.log(`⚠️ No admin emails found, checking for alternative admin fields`);
-        
-        // Try alternative admin queries if the first one didn't work
-        const altAdminSnapshot = await admin.firestore()
-          .collection("users")
-          .where("role", "==", "admin")
-          .get();
-        
-        if (altAdminSnapshot.size > 0) {
-          console.log(`📝 Found ${altAdminSnapshot.size} admin users with role field`);
-          adminEmails.push(...altAdminSnapshot.docs
-            .map(doc => doc.data()?.email)
-            .filter(Boolean));
-        }
-      }
-      
-      if (adminEmails.length === 0) {
-        console.error(`❌ No admin emails found, cannot send notification`);
-        return null;
-      }
-      
-      // Check for different possible field names that might indicate a director
+      // ตรวจสอบว่าผู้ใช้เป็น director หรือไม่
       const isDirector = 
         userData.occupation === "director" || 
         userData.role === "director" || 
         userData.user_type === "director" ||
         userData.type === "director" ||
         userData.account_type === "director" ||
-        (userData.roles && userData.roles.includes("director"));
+        (userData.roles && Array.isArray(userData.roles) && userData.roles.includes("director"));
       
       console.log(`📝 Is user a director? ${isDirector ? "YES" : "NO"}`);
       
-      // Send email directly without using the helper function to ensure it works
+      // ถ้าเป็น director ให้ส่งอีเมลแจ้งเตือนผู้ดูแลระบบ
       if (isDirector) {
-        console.log(`📝 Preparing email for new director: ${userId}`);
-        
-        const emailOptions = {
-          to: adminEmails.join(","),
-          subject: "แจ้งเตือน: 📩 มีการสมัครใหม่จากผู้กำกับ",
-          html: `
-            <h2>สวัสดี Admin,</h2>
-            <p>มีการสมัครใหม่จากผู้กำกับ:</p>
-            <ul>
-              <li><strong>ชื่อ:</strong> ${userData.fullname_th || userData.fullname || userData.name || "N/A"}</li>
-              <li><strong>อีเมล:</strong> ${userData.email || "N/A"}</li>
-              <li><strong>User ID:</strong> ${userId}</li>
-            </ul>
-            <p>รายละเอียดผู้ใช้:</p>
-            <pre>${JSON.stringify(userData, null, 2)}</pre>
-            <a href="https://thaifilmdirectors.com/admin/applications" style="padding:10px 20px; background:#EF4444; color:#fff; text-decoration:none; border-radius:5px;">ตรวจสอบการสมัคร</a>
-          `
-        };
-        
-        try {
-          await transporter.sendMail({
-            from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>`,
-            ...emailOptions,
-            replyTo: "admin@thaifilmdirectors.com"
-          });
-          
-          console.log(`✅ Email notification sent for new director: ${userId} to ${adminEmails.join(", ")}`);
-        } catch (emailError) {
-          console.error(`❌ Error sending email: ${emailError}`);
-        }
+        console.log(`📝 Sending email notification for new director: ${userId}`);
+        await sendEmailNotificationHelper("new_director_signup", userId, userData);
+        console.log(`✅ Email notification sent for new director: ${userId}`);
       } else {
         console.log(`📝 Not sending email - user is not a director: ${userId}`);
       }
     } catch (error) {
-      console.error(`❌ Error in onNewDirectorSignup: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Error in onNewDirectorSignup for user ${userId}: ${errorMessage}`, error);
     }
     return null;
   });
 
+// ฟังก์ชัน Cloud Function ที่ทริกเกอร์เมื่อมีการอัปเดตสถานะของผู้กำกับ
 export const onDirectorStatusChange = functions
   .region("asia-southeast1")
   .firestore.document("users/{userId}")
   .onUpdate(async (change, context) => {
+    const userId = context.params.userId;
     try {
       const before = change.before.data();
       const after = change.after.data();
-      const userId = context.params.userId;
       
-      console.log(`📝 User updated: ${userId}`, { before, after });
-      
-      // Check for different possible field names that might indicate a director
+      // ตรวจสอบว่าผู้ใช้เป็น director หรือไม่
       const isDirector = 
         after.occupation === "director" || 
         after.role === "director" || 
         after.user_type === "director" ||
-        (after.roles && after.roles.includes("director"));
+        after.type === "director" ||
+        after.account_type === "director" ||
+        (after.roles && Array.isArray(after.roles) && after.roles.includes("director"));
       
-      // Check for different possible status field names
+      // ตรวจสอบการเปลี่ยนแปลงสถานะ
       const beforeStatus = before.verification_status || before.status || before.director_status;
       const afterStatus = after.verification_status || after.status || after.director_status;
       
       const statusChanged = beforeStatus !== afterStatus;
       
-      console.log(`📝 Is user a director? ${isDirector ? "YES" : "NO"}`);
-      console.log(`📝 Status changed? ${statusChanged ? "YES" : "NO"} (${beforeStatus} -> ${afterStatus})`);
+      console.log(`📝 User updated: ${userId}, Is director: ${isDirector}, Status changed: ${statusChanged} (${beforeStatus} -> ${afterStatus})`);
       
       if (isDirector && statusChanged) {
         if (afterStatus === "approved") {
           console.log(`📝 Sending approval email for director: ${userId}`);
-          await sendEmailNotificationHelper("director_approved", userId);
+          await sendEmailNotificationHelper("director_approved", userId, after);
           console.log(`✅ Approval email sent for director: ${userId}`);
         } else if (afterStatus === "rejected") {
           console.log(`📝 Sending rejection email for director: ${userId}`);
-          await sendEmailNotificationHelper("director_rejected", userId);
+          await sendEmailNotificationHelper("director_rejected", userId, after);
           console.log(`✅ Rejection email sent for director: ${userId}`);
         } else {
           console.log(`📝 Status changed to ${afterStatus}, no email sent`);
@@ -240,14 +204,21 @@ export const onDirectorStatusChange = functions
         console.log(`📝 Not sending email - conditions not met: isDirector=${isDirector}, statusChanged=${statusChanged}`);
       }
     } catch (error) {
-      console.error(`❌ Error in onDirectorStatusChange: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Error in onDirectorStatusChange for user ${userId}: ${errorMessage}`, error);
     }
     return null;
   });
 
-// สำหรับเรียกจาก client ถ้าต้องการ
+// สำหรับเรียกจาก client ถ้าต้องการส่งอีเมลโดยตรง
 export const sendEmailNotification = functions
   .region("asia-southeast1")
   .https.onCall(async (data: { type: string; userId: string }, context) => {
-    return await sendEmailNotificationHelper(data.type, data.userId);
+    try {
+      return await sendEmailNotificationHelper(data.type, data.userId);
+    } catch (error) {
+      console.error(`❌ Error in sendEmailNotification: ${error}`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new functions.https.HttpsError('internal', errorMessage);
+    }
   });
