@@ -28,27 +28,36 @@ async function sendEmailNotificationHelper(type: string, userId: string, userDat
       userData_final = userDoc.data() || {};
     }
 
-    // ดึงข้อมูลผู้ดูแลระบบที่มี web_role เป็น admin
-    const adminSnapshot = await admin.firestore()
-      .collection("users")
-      .where("web_role", "==", "admin")
-      .get();
-
-    let adminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+    // กำหนดอีเมลผู้ดูแลระบบแบบตายตัว (hardcoded) เพื่อให้แน่ใจว่าจะส่งได้เสมอ
+    const defaultAdminEmails = ['jmdsponx@gmail.com', 'admin@thaifilmdirectors.com'];
     
-    // ถ้าไม่พบผู้ดูแลระบบจาก web_role ให้ลองค้นหาจากฟิลด์ role
-    if (adminEmails.length === 0) {
-      const altAdminSnapshot = await admin.firestore()
+    // เริ่มด้วยอีเมลที่กำหนดไว้แบบตายตัว
+    let adminEmails = [...defaultAdminEmails];
+    
+    try {
+      // ดึงข้อมูลผู้ดูแลระบบที่มี web_role เป็น admin (เพิ่มเติมจากที่กำหนดไว้แล้ว)
+      const adminSnapshot = await admin.firestore()
         .collection("users")
-        .where("role", "==", "admin")
+        .where("web_role", "==", "admin")
         .get();
-      
-      adminEmails = altAdminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
-    }
 
-    // ถ้ายังไม่พบผู้ดูแลระบบ ให้แจ้งเตือนความผิดพลาด
-    if (adminEmails.length === 0) {
-      throw new Error("ไม่พบอีเมลผู้ดูแลระบบ ไม่สามารถส่งการแจ้งเตือนได้");
+      // เพิ่มอีเมลที่พบจากฐานข้อมูลเข้าไปในรายการ
+      const dbAdminEmails = adminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+      adminEmails = [...new Set([...adminEmails, ...dbAdminEmails])]; // ใช้ Set เพื่อกำจัดค่าซ้ำ
+      
+      // ถ้าไม่พบผู้ดูแลระบบจาก web_role ให้ลองค้นหาจากฟิลด์ role
+      if (dbAdminEmails.length === 0) {
+        const altAdminSnapshot = await admin.firestore()
+          .collection("users")
+          .where("role", "==", "admin")
+          .get();
+        
+        const altDbAdminEmails = altAdminSnapshot.docs.map(doc => doc.data()?.email).filter(Boolean);
+        adminEmails = [...new Set([...adminEmails, ...altDbAdminEmails])]; // ใช้ Set เพื่อกำจัดค่าซ้ำ
+      }
+    } catch (dbError) {
+      // หากมีข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล ให้บันทึกข้อผิดพลาดแต่ยังคงใช้อีเมลที่กำหนดไว้แบบตายตัว
+      console.warn(`⚠️ ไม่สามารถดึงข้อมูลผู้ดูแลระบบจากฐานข้อมูลได้: ${dbError}. ใช้อีเมลที่กำหนดไว้แบบตายตัวแทน.`);
     }
 
     // สร้างตัวเลือกสำหรับอีเมลตามประเภทการแจ้งเตือน
