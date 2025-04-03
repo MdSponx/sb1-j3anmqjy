@@ -4,6 +4,33 @@
 
 ## Recent Updates
 
+### 4/4/2025 - Fixed Admin Email Notification with Hardcoded Addresses
+
+Ensured admin notifications are always delivered by implementing a more robust approach:
+
+- Problem: 
+  - Admin email notifications were still not being delivered consistently
+  - The system was relying solely on finding admin users in the database
+
+- Solution: 
+  - Added hardcoded admin email addresses as a guaranteed fallback
+  - Implemented a two-tier approach that combines hardcoded addresses with database queries
+  - Added error handling for database queries to ensure notifications are sent even if queries fail
+
+- Implementation:
+  - Added hardcoded admin email addresses: 'jmdsponx@gmail.com' and 'admin@thaifilmdirectors.com'
+  - Modified the email notification system to:
+    - Start with the hardcoded admin emails to ensure notifications are always delivered
+    - Then attempt to query admin users from the database to include them as well
+    - Use a Set to eliminate any duplicate email addresses
+    - Continue with hardcoded emails even if database queries fail
+  - Enhanced error handling and logging throughout the process
+
+- Result: 
+  - Guaranteed email notifications to admin users when new directors sign up
+  - Resilient notification system that works even if database queries fail
+  - Comprehensive admin notification coverage through both hardcoded and dynamic email addresses
+
 ### 3/31/2025 - Further Enhanced Email Notification System
 
 Added additional improvements to ensure admin notifications for new director signups:
