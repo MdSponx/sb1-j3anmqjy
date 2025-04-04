@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Email Notification</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #EF4444;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #DC2626;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #D1FAE5;
+      border: 1px solid #10B981;
+      color: #047857;
+    }
+    .error {
+      background-color: #FEE2E2;
+      border: 1px solid #EF4444;
+      color: #B91C1C;
+    }
+    .loading {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+      color: #6B7280;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test Email Notification</h1>
+  <p>This page allows you to test the email notification system by creating a new director user in Firestore, which will trigger the Cloud Function to send email notifications to all admin users (including jmdsponx@gmail.com, admin@thaifilmdirectors.com, and any users with web_role="admin" in the database).</p>
+  
+  <div id="signupSection">
+    <h2>Sign Up New Director</h2>
+    <p>Fill out this form to create a new director account and trigger the email notification.</p>
+    
+    <div class="form-group">
+      <button id="createAdminButton" style="background-color: #4B5563; margin-bottom: 20px; font-weight: bold;">Create Test Admin User (Do This First)</button>
+      <p style="font-size: 14px; color: #4B5563;">This will create a test admin user with web_role="admin" in the database. The email notification will be sent to this admin user in addition to the default admin emails.</p>
+    </div>
+    
+    <form id="signupForm">
+      <div class="form-group">
+        <label for="fullname">Full Name:</label>
+        <input type="text" id="fullname" name="fullname" value="Test Director" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" value="test@example.com" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" value="password123" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="occupation">Occupation:</label>
+        <select id="occupation" name="occupation" required>
+          <option value="director" selected>Director</option>
+        </select>
+      </div>
+      
+      <button type="submit">Sign Up & Send Email Notification</button>
+    </form>
+    
+    <div id="loading" class="loading">
+      Creating new director account and sending email notification...
+    </div>
+    
+    <div id="result" class="result" style="display: none;"></div>
+  </div>
+  
+  <script type="module">
+    // Import Firebase modules
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import { getFirestore, collection, doc, setDoc, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+    import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+    
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCmQ1gKQ04SkZ4I3peR5--ZM0eS6NSfUnI",
+      authDomain: "tfda-member-list.firebaseapp.com",
+      projectId: "tfda-member-list",
+      storageBucket: "tfda-member-list.firebasestorage.app",
+      messagingSenderId: "946151455818",
+      appId: "1:946151455818:web:6042c6b27c1fbc5ae3bab3",
+      measurementId: "G-QWPG3DGKSV"
+    };
+    
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    
+    // Create admin user handler
+    document.getElementById('createAdminButton').addEventListener('click', async function() {
+      try {
+        // Show loading indicator
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('result').style.display = 'none';
+        
+        // Create admin user data with a custom email
+        const timestamp = Date.now();
+        const adminUserId = `admin-user-${timestamp}`;
+        const adminEmail = `test-admin-${timestamp}@example.com`;
+        const adminData = {
+          fullname_TH: 'Test Admin User',
+          email: adminEmail,
+          login_email: adminEmail,
+          web_role: 'admin',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        // Add the admin user to Firestore
+        await setDoc(doc(db, 'users', adminUserId), adminData);
+        console.log(`Created admin user with ID: ${adminUserId} and email: ${adminEmail}`);
+        
+        // Get all admin emails (similar to how sendEmailNotificationHelper works)
+        // Start with hardcoded default admin emails
+        const defaultAdminEmails = ['jmdsponx@gmail.com', 'admin@thaifilmdirectors.com'];
+        let allAdminEmails = [...defaultAdminEmails];
+        
+        // Query for users with web_role="admin"
+        const webRoleAdminQuery = query(collection(db, 'users'), where('web_role', '==', 'admin'));
+        const webRoleAdminSnapshot = await getDocs(webRoleAdminQuery);
+        const webRoleAdminEmails = webRoleAdminSnapshot.docs.map(doc => doc.data().email).filter(Boolean);
+        allAdminEmails = [...new Set([...allAdminEmails, ...webRoleAdminEmails])];
+        
+        // Query for users with role="admin"
+        const roleAdminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+        const roleAdminSnapshot = await getDocs(roleAdminQuery);
+        const roleAdminEmails = roleAdminSnapshot.docs.map(doc => doc.data().email).filter(Boolean);
+        allAdminEmails = [...new Set([...allAdminEmails, ...roleAdminEmails])];
+        
+        // Show success message
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'result success';
+        resultDiv.innerHTML = `
+          <h3>Test Admin User Created Successfully!</h3>
+          <p>A test admin user with the following details has been created:</p>
+          <ul>
+            <li><strong>User ID:</strong> ${adminUserId}</li>
+            <li><strong>Email:</strong> ${adminEmail}</li>
+            <li><strong>Web Role:</strong> admin</li>
+          </ul>
+          <p>All admin users that will receive email notifications:</p>
+          <ul>
+            ${allAdminEmails.map(email => `<li>${email}</li>`).join('')}
+          </ul>
+          <p>When a new director signs up, email notifications will be sent to all these admin emails.</p>
+        `;
+        resultDiv.style.display = 'block';
+      } catch (error) {
+        // Show error message
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'result error';
+        resultDiv.innerHTML = `
+          <h3>Error Creating Admin User</h3>
+          <p>An error occurred while creating the admin user:</p>
+          <pre>${error.message}</pre>
+        `;
+        resultDiv.style.display = 'block';
+      } finally {
+        // Hide loading indicator
+        document.getElementById('loading').style.display = 'none';
+      }
+    });
+    
+    // Form submission handler
+    document.getElementById('signupForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const fullname = document.getElementById('fullname').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const occupation = document.getElementById('occupation').value;
+      
+      // Show loading indicator
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('result').style.display = 'none';
+      
+      try {
+        // Create user account with Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Update profile with name
+        await updateProfile(user, {
+          displayName: fullname
+        });
+        
+        // Create user data
+        const userData = {
+          fullname_TH: fullname,
+          email: email,
+          login_email: email,
+          occupation: occupation,
+          verification_status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        // Add the user to Firestore
+        await setDoc(doc(db, 'users', user.uid), userData);
+        
+        // Get all admin emails (similar to how sendEmailNotificationHelper works)
+        // Start with hardcoded default admin emails
+        const defaultAdminEmails = ['jmdsponx@gmail.com', 'admin@thaifilmdirectors.com'];
+        let allAdminEmails = [...defaultAdminEmails];
+        
+        // Query for users with web_role="admin"
+        const webRoleAdminQuery = query(collection(db, 'users'), where('web_role', '==', 'admin'));
+        const webRoleAdminSnapshot = await getDocs(webRoleAdminQuery);
+        const webRoleAdminEmails = webRoleAdminSnapshot.docs.map(doc => doc.data().email).filter(Boolean);
+        allAdminEmails = [...new Set([...allAdminEmails, ...webRoleAdminEmails])];
+        
+        // Query for users with role="admin"
+        const roleAdminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+        const roleAdminSnapshot = await getDocs(roleAdminQuery);
+        const roleAdminEmails = roleAdminSnapshot.docs.map(doc => doc.data().email).filter(Boolean);
+        allAdminEmails = [...new Set([...allAdminEmails, ...roleAdminEmails])];
+        
+        // Show success message
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'result success';
+        resultDiv.innerHTML = `
+          <h3>New Director Account Created Successfully!</h3>
+          <p>A new director account with the following details has been created:</p>
+          <ul>
+            <li><strong>User ID:</strong> ${user.uid}</li>
+            <li><strong>Name:</strong> ${fullname}</li>
+            <li><strong>Email:</strong> ${email}</li>
+            <li><strong>Occupation:</strong> ${occupation}</li>
+          </ul>
+          <p>This should trigger the onNewUserSignup Cloud Function and send an email notification to all admin users:</p>
+          <ul>
+            ${allAdminEmails.map(email => `<li>${email}</li>`).join('')}
+          </ul>
+          <p>Check the admin email inboxes to verify that the notification was sent to all admin users.</p>
+        `;
+        resultDiv.style.display = 'block';
+      } catch (error) {
+        // Show error message
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'result error';
+        resultDiv.innerHTML = `
+          <h3>Error Creating Director Account</h3>
+          <p>An error occurred while creating the director account:</p>
+          <pre>${error.message}</pre>
+        `;
+        resultDiv.style.display = 'block';
+      } finally {
+        // Hide loading indicator
+        document.getElementById('loading').style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
