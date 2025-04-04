@@ -6,9 +6,10 @@ import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } 
 import { doc, setDoc } from 'firebase/firestore';
 import { useFirebase } from '../../contexts/firebase';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+// Import Button with correct casing
+import { Button } from '../ui/Button';
 import { searchDirectorByName } from '../../lib/firebase/directors';
 import { calculateMemberStatus } from '../../lib/firebase/membership';
 import { DirectorConfirmDialog } from '../registration/DirectorConfirmDialog';
@@ -61,10 +62,13 @@ export function CreateAccountForm() {
       // Send email verification
       await sendEmailVerification(userCredential.user);
 
-      // Create initial user document
+      // Create initial user document with all necessary fields
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         fullname_TH: data.fullname_TH,
+        email: data.email, // Add email field to match test-email.html
         login_email: data.email,
+        occupation: 'general people', // Default occupation
+        verification_status: 'pending', // Add verification status
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
@@ -210,9 +214,10 @@ export function CreateAccountForm() {
           </div>
         )}
 
-        <Button
+        {/* Use regular HTML button for form submission */}
+        <button
           type="submit"
-          className="w-full py-2 bg-red-500 hover:bg-red-600 text-white"
+          className="w-full py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
           disabled={isLoading}
         >
           {isLoading
@@ -222,14 +227,13 @@ export function CreateAccountForm() {
             : language === 'th'
             ? 'สร้างบัญชี'
             : 'Create Account'}
-        </Button>
+        </button>
       </form>
 
       {foundDirector && (
         <DirectorConfirmDialog
           director={foundDirector}
           onClose={() => setFoundDirector(null)}
-          onConfirm={handleDirectorConfirm}
         />
       )}
     </>

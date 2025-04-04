@@ -64,16 +64,29 @@ async function sendEmailNotificationHelper(type: string, userId: string, userDat
     let emailOptions;
 
     switch (type) {
+      case "new_user_signup":
       case "new_director_signup":
+        const userType = userData_final.occupation || "N/A";
+        const isDirector = 
+          userType === "director" || 
+          userData_final.role === "director" || 
+          userData_final.user_type === "director" ||
+          userData_final.type === "director" ||
+          userData_final.account_type === "director" ||
+          (userData_final.roles && Array.isArray(userData_final.roles) && userData_final.roles.includes("director"));
+        
         emailOptions = {
           to: adminEmails.join(","),
-          subject: "แจ้งเตือน: 📩 มีการสมัครใหม่จากผู้กำกับ",
+          subject: isDirector 
+            ? "แจ้งเตือน: 📩 มีการสมัครใหม่จากผู้กำกับ" 
+            : "แจ้งเตือน: 📩 มีการสมัครใหม่จากสมาชิก",
           html: `
             <h2>สวัสดี Admin,</h2>
-            <p>มีการสมัครใหม่จากผู้กำกับ:</p>
+            <p>มีการสมัครใหม่${isDirector ? 'จากผู้กำกับ' : ''}:</p>
             <ul>
-              <li><strong>ชื่อ:</strong> ${userData_final.fullname_th || userData_final.fullname || userData_final.name || "N/A"}</li>
-              <li><strong>อีเมล:</strong> ${userData_final.email || "N/A"}</li>
+              <li><strong>ชื่อ:</strong> ${userData_final.fullname_th || userData_final.fullname_TH || userData_final.fullname || userData_final.name || "N/A"}</li>
+              <li><strong>อีเมล:</strong> ${userData_final.email || userData_final.login_email || "N/A"}</li>
+              <li><strong>ประเภท:</strong> ${userType}</li>
               <li><strong>User ID:</strong> ${userId}</li>
             </ul>
             <a href="https://thaifilmdirectors.com/admin/applications" style="padding:10px 20px; background:#EF4444; color:#fff; text-decoration:none; border-radius:5px;">ตรวจสอบการสมัคร</a>
@@ -114,12 +127,29 @@ async function sendEmailNotificationHelper(type: string, userId: string, userDat
       throw new Error("ไม่พบอีเมลผู้รับ ไม่สามารถส่งการแจ้งเตือนได้");
     }
 
-    // ส่งอีเมล
-    await transporter.sendMail({
-      from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>`,
-      ...emailOptions,
-      replyTo: "admin@thaifilmdirectors.com"
-    });
+    // Log all admin emails that will receive the notification
+    console.log(`📧 Sending email to: ${emailOptions.to}`);
+    
+    // Convert comma-separated emails to array for individual sending
+    const emailList = emailOptions.to.split(',').map((email: string) => email.trim()).filter(Boolean);
+    console.log(`📧 Email list (${emailList.length} recipients):`, emailList);
+    
+    // Send individual emails to each recipient to ensure delivery
+    for (const recipientEmail of emailList) {
+      try {
+        // ส่งอีเมลแยกให้แต่ละคน
+        await transporter.sendMail({
+          from: `"สมาคมผู้กำกับภาพยนตร์ไทย" <${gmailAddress}>`,
+          ...emailOptions,
+          to: recipientEmail, // Send to individual recipient
+          replyTo: "admin@thaifilmdirectors.com"
+        });
+        console.log(`✅ Email sent successfully to: ${recipientEmail}`);
+      } catch (emailError) {
+        console.error(`❌ Failed to send email to ${recipientEmail}:`, emailError);
+        // Continue with other recipients even if one fails
+      }
+    }
 
     console.log(`✅ ส่งอีเมลสำเร็จ: ${type} -> ${emailOptions.to}`);
     return { success: true };
@@ -134,7 +164,7 @@ async function sendEmailNotificationHelper(type: string, userId: string, userDat
 }
 
 // ฟังก์ชัน Cloud Function ที่ทริกเกอร์เมื่อมีผู้ใช้ใหม่
-export const onNewDirectorSignup = functions
+export const onNewUserSignup = functions
   .region("asia-southeast1")
   .firestore.document("users/{userId}")
   .onCreate(async (snapshot, context) => {
@@ -153,16 +183,12 @@ export const onNewDirectorSignup = functions
         userData.account_type === "director" ||
         (userData.roles && Array.isArray(userData.roles) && userData.roles.includes("director"));
       
-      console.log(`📝 Is user a director? ${isDirector ? "YES" : "NO"}`);
+      console.log(`📝 User type: ${userData.occupation || "unknown"}, Is director? ${isDirector ? "YES" : "NO"}`);
       
-      // ถ้าเป็น director ให้ส่งอีเมลแจ้งเตือนผู้ดูแลระบบ
-      if (isDirector) {
-        console.log(`📝 Sending email notification for new director: ${userId}`);
-        await sendEmailNotificationHelper("new_director_signup", userId, userData);
-        console.log(`✅ Email notification sent for new director: ${userId}`);
-      } else {
-        console.log(`📝 Not sending email - user is not a director: ${userId}`);
-      }
+      // ส่งอีเมลแจ้งเตือนผู้ดูแลระบบสำหรับทุกการสมัคร
+      console.log(`📝 Sending email notification for new user: ${userId}`);
+      await sendEmailNotificationHelper("new_user_signup", userId, userData);
+      console.log(`✅ Email notification sent for new user: ${userId}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`❌ Error in onNewDirectorSignup for user ${userId}: ${errorMessage}`, error);
