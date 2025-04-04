@@ -4,6 +4,30 @@
 
 ## Recent Updates
 
+### 4/4/2025 - Enhanced Sign-up Process with Waiting Page and Profile Redirection
+
+Improved the user experience during and after the sign-up process:
+
+- Problem: 
+  - Users had no visual feedback during the sign-up process
+  - After successful sign-up, users weren't automatically directed to complete their profile
+
+- Solution: 
+  - Added a waiting page with loading animation during the sign-up process
+  - Implemented automatic redirection to the edit-profile page after successful sign-up
+
+- Implementation:
+  - Modified the CreateAccountForm component to:
+    - Show a spinner animation with descriptive text while processing
+    - Display different messages in Thai and English based on the user's language preference
+    - Automatically redirect to '/edit-profile' after successful account creation
+    - Maintain this redirection behavior for both regular users and directors
+
+- Result: 
+  - Improved user experience with clear visual feedback during sign-up
+  - Streamlined user flow by automatically guiding users to complete their profile
+  - Consistent experience across different user types and languages
+
 ### 4/4/2025 - Fixed Admin Email Notification with Hardcoded Addresses
 
 Ensured admin notifications are always delivered by implementing a more robust approach:

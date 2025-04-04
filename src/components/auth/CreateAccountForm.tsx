@@ -32,6 +32,7 @@ export function CreateAccountForm() {
   const { language } = useLanguage();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [foundDirector, setFoundDirector] = useState<Director | null>(null);
 
   const {
@@ -45,6 +46,7 @@ export function CreateAccountForm() {
   const onSubmit = async (data: CreateAccountFormData) => {
     try {
       setIsLoading(true);
+      setIsProcessing(true);
       setError(null);
       
       // Create user account
@@ -78,7 +80,7 @@ export function CreateAccountForm() {
       if (director && directorData) {
         setFoundDirector(director);
       } else {
-        window.location.href = '/register';
+        window.location.href = '/edit-profile';
       }
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
@@ -120,11 +122,28 @@ export function CreateAccountForm() {
         updated_at: new Date().toISOString()
       }, { merge: true });
       
-      window.location.href = '/register/verify';
+      window.location.href = '/edit-profile';
     } else {
-      window.location.href = '/register';
+      window.location.href = '/edit-profile';
     }
   };
+
+  // Render loading/waiting page while processing
+  if (isProcessing) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-4 p-8">
+        <div className="w-16 h-16 border-4 border-t-red-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+        <h2 className="text-xl font-semibold text-white">
+          {language === 'th' ? 'กำลังสร้างบัญชีของคุณ...' : 'Creating your account...'}
+        </h2>
+        <p className="text-gray-400 text-center">
+          {language === 'th' 
+            ? 'กรุณารอสักครู่ เรากำลังตั้งค่าบัญชีของคุณ' 
+            : 'Please wait while we set up your account'}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
